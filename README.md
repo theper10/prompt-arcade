@@ -4,6 +4,14 @@ Prompt Arcade is a full-stack web app that turns short text prompts into playabl
 
 Users can describe a game idea, generate a lightweight cartridge, play it directly in the browser, save favorite cartridges locally, and export cartridges as standalone HTML files.
 
+## Live Demo
+
+Try the static demo here:
+
+https://theper10.github.io/prompt-arcade/
+
+The live demo runs in static demo mode using local sample cartridges. For live backend-powered generation, run the project locally with your own API key.
+
 ## Features
 
 - Prompt-driven game cartridge generation
