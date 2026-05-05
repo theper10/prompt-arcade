@@ -46,7 +46,12 @@ export function createMockCartridge(input: GenerateCartridgeRequest): GeneratedC
     subtitle: 'A deterministic mock cartridge for local testing.',
     description:
       'Collect glowing prompt shards while dodging unstable hazards. This mock mode proves the sandbox, save, repair, and export flows without spending API credits.',
-    controls: ['Move with Arrow keys or WASD', 'Click or tap to dash toward a point', 'Press R to restart'],
+    controls: [
+      'Move: WASD or Arrow keys',
+      'Primary action: hold Space for a shield dash',
+      'Mouse/touch: click or tap to dash toward a point',
+      'Restart: press R',
+    ],
     objective: `Collect ${targetScore} prompt shards before the stability meter reaches zero.`,
     winCondition: `Win by collecting ${targetScore} shards.`,
     loseCondition: 'Lose when you collide with too many unstable hazards.',
@@ -130,6 +135,7 @@ canvas {
       score: 0,
       stability: 100,
       player: { x: canvas.width / 2, y: canvas.height / 2, r: 15, vx: 0, vy: 0 },
+      dash: 0,
       shard: makeShard(),
       hazards: []
     };
@@ -170,10 +176,11 @@ canvas {
     var player = game.player;
     var ax = 0;
     var ay = 0;
-    if (keys.ArrowLeft || keys.a) ax -= 1;
-    if (keys.ArrowRight || keys.d) ax += 1;
-    if (keys.ArrowUp || keys.w) ay -= 1;
-    if (keys.ArrowDown || keys.s) ay += 1;
+    if (keys.ArrowLeft || keys.a || keys.A) ax -= 1;
+    if (keys.ArrowRight || keys.d || keys.D) ax += 1;
+    if (keys.ArrowUp || keys.w || keys.W) ay -= 1;
+    if (keys.ArrowDown || keys.s || keys.S) ay += 1;
+    if (keys[' '] || keys.Space) game.dash = Math.max(game.dash, 9);
 
     if (pointer) {
       var dx = pointer.x - player.x;
@@ -183,8 +190,10 @@ canvas {
       ay += dy / length * 1.4;
     }
 
-    player.vx = (player.vx + ax * 0.7) * 0.88;
-    player.vy = (player.vy + ay * 0.7) * 0.88;
+    var dashPower = game.dash > 0 ? 1.85 : 1;
+    game.dash = Math.max(0, game.dash - 1);
+    player.vx = (player.vx + ax * 0.7 * dashPower) * 0.88;
+    player.vy = (player.vy + ay * 0.7 * dashPower) * 0.88;
     player.x = Math.max(player.r, Math.min(canvas.width - player.r, player.x + player.vx));
     player.y = Math.max(player.r + 38, Math.min(canvas.height - player.r, player.y + player.vy));
 
@@ -195,9 +204,14 @@ canvas {
       if (hazard.x < hazard.r || hazard.x > canvas.width - hazard.r) hazard.vx *= -1;
       if (hazard.y < hazard.r + 38 || hazard.y > canvas.height - hazard.r) hazard.vy *= -1;
       if (distance(player, hazard) < player.r + hazard.r) {
-        game.stability -= 0.75;
-        hazard.vx *= -1.02;
-        hazard.vy *= -1.02;
+        if (game.dash > 0) {
+          hazard.vx *= -1.35;
+          hazard.vy *= -1.35;
+        } else {
+          game.stability -= 0.75;
+          hazard.vx *= -1.02;
+          hazard.vy *= -1.02;
+        }
       }
     }
 
@@ -266,6 +280,14 @@ canvas {
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
     ctx.stroke();
+    if (game.dash > 0) {
+      ctx.strokeStyle = 'rgba(125, 255, 206, 0.72)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r + 12 + game.dash, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
 
     ctx.fillStyle = '#f8fbff';
     ctx.font = '18px ui-monospace, SFMono-Regular, Menlo, monospace';
@@ -297,11 +319,16 @@ canvas {
     reset();
   });
   window.addEventListener('keydown', function (event) {
+    if (event.key === ' ' || event.code === 'Space' || event.key.indexOf('Arrow') === 0 || 'wasdWASD'.indexOf(event.key) >= 0) {
+      event.preventDefault();
+    }
     keys[event.key] = true;
+    keys[event.code] = true;
     if (event.key === 'r' || event.key === 'R') reset();
   });
   window.addEventListener('keyup', function (event) {
     keys[event.key] = false;
+    keys[event.code] = false;
   });
   canvas.addEventListener('pointerdown', function (event) {
     var rect = canvas.getBoundingClientRect();

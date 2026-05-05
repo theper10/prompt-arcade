@@ -27,11 +27,13 @@ export function buildCartridgeDocument(cartridge: AiCartridge) {
   }
   body {
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    outline: none;
   }
   canvas {
     display: block;
     max-width: 100%;
     touch-action: none;
+    outline: none;
   }
   button, input, select, textarea {
     font: inherit;
@@ -39,13 +41,76 @@ export function buildCartridgeDocument(cartridge: AiCartridge) {
 ${css}
 </style>
 </head>
-<body>
+<body tabindex="0">
 ${cartridge.html}
 <script>
   (function () {
+    var gameplayKeys = {
+      ArrowUp: true,
+      ArrowDown: true,
+      ArrowLeft: true,
+      ArrowRight: true,
+      w: true,
+      a: true,
+      s: true,
+      d: true,
+      W: true,
+      A: true,
+      S: true,
+      D: true
+    };
+
     function send(type, payload) {
       try { parent.postMessage({ type: type, ...payload }, "*"); } catch {}
     }
+
+    function isEditableTarget(target) {
+      if (!target || !target.tagName) return false;
+      var tagName = String(target.tagName).toLowerCase();
+      return tagName === "input" || tagName === "textarea" || tagName === "select" || target.isContentEditable;
+    }
+
+    function isGameplayKey(event) {
+      return gameplayKeys[event.key] || event.key === " " || event.code === "Space";
+    }
+
+    function focusBody() {
+      try {
+        if (document.body) document.body.focus({ preventScroll: true });
+      } catch {
+        try { if (document.body) document.body.focus(); } catch {}
+      }
+    }
+
+    if (document.body) {
+      document.body.tabIndex = 0;
+    }
+
+    window.addEventListener("focus", function () {
+      send("GAME_FOCUSED", {});
+    });
+
+    window.addEventListener("blur", function () {
+      send("GAME_BLURRED", {});
+    });
+
+    document.addEventListener("pointerdown", function () {
+      focusBody();
+      send("GAME_FOCUSED", {});
+    }, true);
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") {
+        send("GAME_BLURRED", {});
+        try { window.blur(); } catch {}
+        try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch {}
+        return;
+      }
+
+      if (isGameplayKey(event) && !isEditableTarget(event.target)) {
+        event.preventDefault();
+      }
+    }, true);
 
     window.onerror = function(message, source, lineno, colno) {
       send("VIBE_CARTRIDGE_ERROR", {

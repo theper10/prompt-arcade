@@ -35,6 +35,15 @@ The game should include:
 - Graceful handling of canvas size.
 - Clear readable UI.
 
+Input requirements:
+- Every real-time game with movement must support both WASD and Arrow keys.
+- When movement exists, the controls array must include a clear item like "Move: WASD or Arrow keys".
+- If the game has a primary action such as jump, shoot, cast, fish, dash, interact, or start, use Space when relevant and mention it clearly in controls.
+- Add mouse or pointer controls when they fit the mechanic.
+- Add touch/mobile controls where practical, such as tap, drag, touch buttons, or touch-to-move.
+- Generated JS should prevent default browser behavior for gameplay keys it uses, especially arrows and Space, while avoiding interference with text inputs.
+- Canvas or root game elements should be focusable where useful, and pointer/touch start should focus the game element.
+
 Prefer varied mechanics. Consider tiny maze, dodge and collect, click to catch, falling object catcher, fishing timing game, reaction game, mini shooter, survival arena, memory-ish puzzle, simple jump game, turn-based micro adventure, rhythm timing game, or another compact arcade idea.
 
 Return these JSON fields exactly:
@@ -75,6 +84,7 @@ Design guidance:
 - Difficulty should affect speed, tolerance, scoring, and lose conditions.
 - Keep the output compact enough for a tiny browser game cartridge.
 - Make the theme unmistakable in text, visuals, and mechanics.
+- Make the control instructions accurate: mention WASD and Arrow keys for movement, Space for primary action if used, and pointer/touch support if included.
 ${repairContext}
 ${validationRepair}
 Return only valid JSON. No markdown.

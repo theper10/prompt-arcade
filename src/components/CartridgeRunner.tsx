@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildCartridgeDocument } from '../lib/buildCartridgeDocument'
+import { cn } from '../lib/cn'
 import type { AiCartridge } from '../types/cartridge'
 
 type BootState = 'idle' | 'ready' | 'timeout' | 'error'
@@ -18,13 +19,72 @@ interface CartridgeMessage {
   column?: number
 }
 
+const gameplayKeys = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'w',
+  'a',
+  's',
+  'd',
+])
+
+function isGameplayKey(event: KeyboardEvent) {
+  return gameplayKeys.has(event.key) || gameplayKeys.has(event.key.toLowerCase()) || event.key === ' ' || event.code === 'Space'
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  const tagName = target.tagName.toLowerCase()
+
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target.isContentEditable
+}
+
 export function CartridgeRunner({ cartridge, isLoading, onRepair, onExport }: CartridgeRunnerProps) {
+  const runnerRef = useRef<HTMLElement | null>(null)
+  const gameFrameRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
   const [bootState, setBootState] = useState<BootState>('idle')
   const [runtimeError, setRuntimeError] = useState('')
   const [iframeKey, setIframeKey] = useState(0)
+  const [gameActive, setGameActive] = useState(false)
 
   const srcDoc = useMemo(() => (cartridge ? buildCartridgeDocument(cartridge) : ''), [cartridge])
+
+  const releaseGameFocus = useCallback(() => {
+    setGameActive(false)
+    iframeRef.current?.blur()
+
+    try {
+      runnerRef.current?.focus({ preventScroll: true })
+    } catch {
+      runnerRef.current?.focus()
+    }
+  }, [])
+
+  const focusGame = useCallback(() => {
+    if (!cartridge) {
+      return
+    }
+
+    setGameActive(true)
+
+    try {
+      iframeRef.current?.focus({ preventScroll: true })
+    } catch {
+      iframeRef.current?.focus()
+    }
+
+    try {
+      iframeRef.current?.contentWindow?.focus()
+    } catch {
+      // Cross-origin focus access can be unavailable for sandboxed srcDoc in some browsers.
+    }
+  }, [cartridge])
 
   useEffect(() => {
     if (!cartridge) {
@@ -50,6 +110,14 @@ export function CartridgeRunner({ cartridge, isLoading, onRepair, onExport }: Ca
         setRuntimeError(`${event.data.message ?? 'Unknown cartridge error'}${location}`)
         setBootState('error')
       }
+
+      if (event.data?.type === 'GAME_FOCUSED') {
+        setGameActive(true)
+      }
+
+      if (event.data?.type === 'GAME_BLURRED') {
+        releaseGameFocus()
+      }
     }
 
     window.addEventListener('message', handleMessage)
@@ -58,7 +126,49 @@ export function CartridgeRunner({ cartridge, isLoading, onRepair, onExport }: Ca
       window.clearTimeout(timeout)
       window.removeEventListener('message', handleMessage)
     }
-  }, [cartridge, iframeKey])
+  }, [cartridge, iframeKey, releaseGameFocus])
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!gameActive || isEditableTarget(event.target)) {
+        return
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        releaseGameFocus()
+        return
+      }
+
+      if (isGameplayKey(event)) {
+        event.preventDefault()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true })
+
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
+  }, [gameActive, releaseGameFocus])
+
+  useEffect(() => {
+    if (!gameActive) {
+      return
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target
+
+      if (target instanceof Node && gameFrameRef.current?.contains(target)) {
+        return
+      }
+
+      releaseGameFocus()
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown, { capture: true })
+
+    return () => document.removeEventListener('pointerdown', handlePointerDown, { capture: true })
+  }, [gameActive, releaseGameFocus])
 
   const overlayMessage =
     bootState === 'timeout'
@@ -70,19 +180,17 @@ export function CartridgeRunner({ cartridge, isLoading, onRepair, onExport }: Ca
   function reload() {
     setBootState('idle')
     setRuntimeError('')
+    setGameActive(false)
     setIframeKey((key) => key + 1)
   }
 
-  function focusGame() {
-    iframeRef.current?.focus()
-  }
-
   return (
-    <section className="arcade-panel flex min-h-[520px] flex-col overflow-hidden p-3 sm:p-4">
+    <section ref={runnerRef} tabIndex={-1} className="arcade-panel flex min-h-[520px] flex-col overflow-hidden p-3 outline-none sm:p-4">
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="eyebrow">sandbox runner</p>
           <h2 className="text-xl font-black text-white">{cartridge ? cartridge.title : 'Awaiting cartridge'}</h2>
+          <p className="mt-2 text-sm text-slate-400">Click the game first, then use WASD / arrows / space.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" disabled={!cartridge || isLoading} onClick={reload} className="tool-button">
@@ -100,20 +208,33 @@ export function CartridgeRunner({ cartridge, isLoading, onRepair, onExport }: Ca
             Export HTML
           </button>
           <button type="button" disabled={!cartridge} onClick={focusGame} className="tool-button">
-            Focus
+            Focus Game
           </button>
         </div>
       </div>
 
-      <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-lg border border-white/10 bg-black/45">
+      <div
+        ref={gameFrameRef}
+        data-testid="game-frame"
+        onPointerDownCapture={focusGame}
+        className={cn(
+          'relative min-h-[420px] flex-1 overflow-hidden rounded-lg border bg-black/45 transition',
+          gameActive
+            ? 'border-cyan-200/80 ring-2 ring-cyan-200/55 shadow-[0_0_34px_rgba(93,246,255,.22)]'
+            : 'border-white/10',
+        )}
+      >
         {cartridge ? (
           <iframe
             key={iframeKey}
             ref={iframeRef}
             title={`${cartridge.title} game cartridge`}
+            tabIndex={0}
             sandbox="allow-scripts"
             srcDoc={srcDoc}
-            className="h-full min-h-[420px] w-full bg-black"
+            onFocus={() => setGameActive(true)}
+            onBlur={() => setGameActive(false)}
+            className="h-full min-h-[420px] w-full bg-black outline-none"
           />
         ) : (
           <div className="grid h-full min-h-[420px] place-items-center px-6 text-center">
@@ -126,8 +247,22 @@ export function CartridgeRunner({ cartridge, isLoading, onRepair, onExport }: Ca
           </div>
         )}
 
+        {cartridge && (
+          <div
+            aria-live="polite"
+            className={cn(
+              'pointer-events-none absolute left-4 top-4 rounded-full border px-3 py-1.5 font-mono text-xs font-bold uppercase backdrop-blur',
+              gameActive
+                ? 'border-emerald-200/55 bg-emerald-300/15 text-emerald-100'
+                : 'border-cyan-200/35 bg-black/70 text-cyan-100',
+            )}
+          >
+            {gameActive ? 'Game focused · Press Esc to release keyboard' : 'Click game to focus'}
+          </div>
+        )}
+
         {cartridge && bootState === 'idle' && (
-          <div className="pointer-events-none absolute inset-x-4 top-4 rounded-lg border border-cyan-300/30 bg-black/70 px-4 py-3 text-sm text-cyan-100 backdrop-blur">
+          <div className="pointer-events-none absolute inset-x-4 top-14 rounded-lg border border-cyan-300/30 bg-black/70 px-4 py-3 text-sm text-cyan-100 backdrop-blur">
             Booting sandbox...
           </div>
         )}
