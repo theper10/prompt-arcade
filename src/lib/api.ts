@@ -1,4 +1,5 @@
 import type { AiCartridge, ApiErrorResponse, GenerateCartridgePayload } from '../types/cartridge'
+import { createStaticDemoCartridge } from './staticDemoCartridge'
 
 const defaultApiBase = 'http://localhost:8787'
 
@@ -31,6 +32,10 @@ async function parseApiError(response: Response) {
 }
 
 export async function generateCartridge(payload: GenerateCartridgePayload): Promise<AiCartridge> {
+    if (import.meta.env.VITE_STATIC_DEMO === 'true') {
+    return createStaticDemoCartridge(payload)
+  }
+  
   const response = await fetch(`${apiBase()}/api/generate-cartridge`, {
     method: 'POST',
     headers: {

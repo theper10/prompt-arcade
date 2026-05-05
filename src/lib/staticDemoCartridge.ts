@@ -1,0 +1,441 @@
+import type { AiCartridge, GenerateCartridgePayload } from '../types/cartridge'
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function titleCasePrompt(prompt: string) {
+  const cleaned = prompt.trim().replace(/\s+/g, ' ')
+
+  if (!cleaned) {
+    return 'Mystery Cabinet'
+  }
+
+  return cleaned
+    .split(' ')
+    .slice(0, 7)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function hashPrompt(prompt: string) {
+  let hash = 0
+
+  for (let index = 0; index < prompt.length; index += 1) {
+    hash = (hash * 31 + prompt.charCodeAt(index)) >>> 0
+  }
+
+  return hash
+}
+
+function createId(seed: number) {
+  return `static-${seed.toString(16)}-${Date.now().toString(16)}`
+}
+
+export function createStaticDemoCartridge(input: GenerateCartridgePayload): AiCartridge {
+  const seed = hashPrompt(`${input.prompt}:${input.chaos}:${input.difficulty}`)
+  const title = `${titleCasePrompt(input.prompt)} DX`
+  const escapedTitle = escapeHtml(title)
+  const theme = input.prompt.trim() || 'mystery arcade'
+  const targetScore = input.difficulty === 'chill' ? 8 : input.difficulty === 'normal' ? 12 : 16
+  const hazardCount = input.difficulty === 'chill' ? 3 : input.difficulty === 'normal' ? 5 : 7
+
+  return {
+    id: createId(seed),
+    createdAt: new Date().toISOString(),
+    prompt: input.prompt,
+    title,
+    subtitle: 'Static demo cartridge',
+    description:
+      'A local demo cartridge generated in the browser for the GitHub Pages version. Run the project locally with the backend for live generation.',
+    controls: [
+      'Move: WASD or Arrow keys',
+      'Shield dash: Space',
+      'Pointer: click inside the game to dash toward a point',
+      'Restart: R',
+    ],
+    objective: `Collect ${targetScore} prompt shards before the stability meter reaches zero.`,
+    winCondition: `Win by collecting ${targetScore} shards.`,
+    loseCondition: 'Lose when stability reaches zero.',
+    estimatedDifficulty: input.difficulty,
+    tags: ['static-demo', 'canvas', 'arcade', input.difficulty],
+    engineNotes: 'Frontend-only static demo cartridge. No backend or API call was used.',
+    qualityWarnings: ['Static demo mode uses local sample cartridge logic.'],
+    html: `
+<div class="pa-game-shell">
+  <div class="pa-hud">
+    <strong>${escapedTitle}</strong>
+    <span id="status">Collect shards. Avoid hazards.</span>
+  </div>
+  <canvas id="game" width="800" height="500" aria-label="${escapedTitle} game canvas" tabindex="0"></canvas>
+</div>`.trim(),
+    css: `
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+.pa-game-shell {
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  padding: 14px;
+  color: #f8fbff;
+  background:
+    linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px),
+    #080a10;
+  background-size: 28px 28px;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.pa-hud {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(93, 246, 255, .45);
+  border-radius: 8px;
+  background: rgba(10, 16, 25, .82);
+  box-shadow: 0 0 18px rgba(93, 246, 255, .18);
+}
+
+.pa-hud strong {
+  color: #7dffce;
+}
+
+.pa-hud span {
+  color: #ffe08a;
+  text-align: right;
+}
+
+canvas {
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 8 / 5;
+  display: block;
+  border: 1px solid rgba(255, 79, 216, .45);
+  border-radius: 8px;
+  background: #07080d;
+  box-shadow: inset 0 0 30px rgba(255, 79, 216, .12);
+  outline: none;
+}`.trim(),
+    js: `
+(function () {
+  var WIDTH = 800;
+  var HEIGHT = 500;
+  var canvas = document.getElementById('game');
+  var ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
+  var status = document.getElementById('status');
+
+  if (!canvas || !ctx || !status) {
+    return;
+  }
+
+  canvas.width = WIDTH;
+  canvas.height = HEIGHT;
+  canvas.focus();
+
+  var theme = ${JSON.stringify(theme)};
+  var seed = ${seed};
+  var targetScore = ${targetScore};
+  var hazardCount = ${hazardCount};
+  var keys = {};
+  var pointer = null;
+  var game = {};
+  var graceFrames = 90;
+
+  function rand() {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  }
+
+  function reset() {
+    game = {
+      running: true,
+      won: false,
+      lost: false,
+      score: 0,
+      stability: 100,
+      player: { x: WIDTH / 2, y: HEIGHT / 2, r: 15, vx: 0, vy: 0 },
+      dash: 0,
+      shard: makeShard(),
+      hazards: [],
+      frames: 0
+    };
+
+    for (var i = 0; i < hazardCount; i += 1) {
+      game.hazards.push(makeHazardAwayFromPlayer());
+    }
+
+    graceFrames = 90;
+    status.textContent = 'Collect shards. Avoid hazards.';
+  }
+
+  function makeShard() {
+    return {
+      x: 50 + rand() * (WIDTH - 100),
+      y: 70 + rand() * (HEIGHT - 130),
+      r: 12 + rand() * 6
+    };
+  }
+
+  function makeHazardAwayFromPlayer() {
+    var hazard;
+    var tries = 0;
+
+    do {
+      var speed = 1.4 + rand() * 2.2 + ${input.chaos} / 90;
+      hazard = {
+        x: 40 + rand() * (WIDTH - 80),
+        y: 80 + rand() * (HEIGHT - 140),
+        r: 14 + rand() * 10,
+        vx: (rand() > 0.5 ? 1 : -1) * speed,
+        vy: (rand() > 0.5 ? 1 : -1) * speed
+      };
+      tries += 1;
+    } while (distance({ x: WIDTH / 2, y: HEIGHT / 2 }, hazard) < 150 && tries < 20);
+
+    return hazard;
+  }
+
+  function distance(a, b) {
+    var dx = a.x - b.x;
+    var dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function isGameplayKey(event) {
+    return (
+      event.code === 'Space' ||
+      event.key.indexOf('Arrow') === 0 ||
+      event.key === 'w' ||
+      event.key === 'a' ||
+      event.key === 's' ||
+      event.key === 'd' ||
+      event.key === 'W' ||
+      event.key === 'A' ||
+      event.key === 'S' ||
+      event.key === 'D'
+    );
+  }
+
+  function update() {
+    if (!game.running) return;
+
+    game.frames += 1;
+
+    var player = game.player;
+    var ax = 0;
+    var ay = 0;
+
+    if (keys.ArrowLeft || keys.KeyA) ax -= 1;
+    if (keys.ArrowRight || keys.KeyD) ax += 1;
+    if (keys.ArrowUp || keys.KeyW) ay -= 1;
+    if (keys.ArrowDown || keys.KeyS) ay += 1;
+
+    if (keys.Space && game.dash <= 0) {
+      game.dash = 12;
+    }
+
+    if (pointer) {
+      var dx = pointer.x - player.x;
+      var dy = pointer.y - player.y;
+      var length = Math.max(1, Math.sqrt(dx * dx + dy * dy));
+      ax += (dx / length) * 1.25;
+      ay += (dy / length) * 1.25;
+    }
+
+    var dashPower = game.dash > 0 ? 1.85 : 1;
+    game.dash = Math.max(0, game.dash - 1);
+
+    player.vx = (player.vx + ax * 0.65 * dashPower) * 0.88;
+    player.vy = (player.vy + ay * 0.65 * dashPower) * 0.88;
+    player.x = Math.max(player.r, Math.min(WIDTH - player.r, player.x + player.vx));
+    player.y = Math.max(player.r + 44, Math.min(HEIGHT - player.r, player.y + player.vy));
+
+    for (var i = 0; i < game.hazards.length; i += 1) {
+      var hazard = game.hazards[i];
+      hazard.x += hazard.vx;
+      hazard.y += hazard.vy;
+
+      if (hazard.x < hazard.r || hazard.x > WIDTH - hazard.r) hazard.vx *= -1;
+      if (hazard.y < hazard.r + 44 || hazard.y > HEIGHT - hazard.r) hazard.vy *= -1;
+
+      if (graceFrames <= 0 && distance(player, hazard) < player.r + hazard.r) {
+        if (game.dash > 0) {
+          hazard.vx *= -1.35;
+          hazard.vy *= -1.35;
+        } else {
+          game.stability -= 0.7;
+          hazard.vx *= -1.02;
+          hazard.vy *= -1.02;
+        }
+      }
+    }
+
+    graceFrames = Math.max(0, graceFrames - 1);
+
+    if (distance(player, game.shard) < player.r + game.shard.r) {
+      game.score += 1;
+      game.stability = Math.min(100, game.stability + 5);
+      game.shard = makeShard();
+      status.textContent = 'Shard captured from "' + theme.slice(0, 34) + '".';
+    }
+
+    if (game.score >= targetScore) {
+      game.running = false;
+      game.won = true;
+      status.textContent = 'Victory. Press R to reboot.';
+    }
+
+    if (game.stability <= 0) {
+      game.running = false;
+      game.lost = true;
+      status.textContent = 'Cartridge destabilized. Press R to reboot.';
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = '#080a10';
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    ctx.strokeStyle = 'rgba(125, 255, 206, 0.11)';
+    ctx.lineWidth = 1;
+
+    for (var x = 0; x < WIDTH; x += 34) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, HEIGHT);
+      ctx.stroke();
+    }
+
+    for (var y = 0; y < HEIGHT; y += 34) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(WIDTH, y);
+      ctx.stroke();
+    }
+
+    var shard = game.shard;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath();
+    ctx.arc(shard.x, shard.y, shard.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff4bd';
+    ctx.stroke();
+
+    for (var i = 0; i < game.hazards.length; i += 1) {
+      var hazard = game.hazards[i];
+      ctx.fillStyle = '#ff4f7b';
+      ctx.beginPath();
+      ctx.arc(hazard.x, hazard.y, hazard.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ff9db5';
+      ctx.stroke();
+    }
+
+    var player = game.player;
+    ctx.fillStyle = '#5df6ff';
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
+
+    if (game.dash > 0) {
+      ctx.strokeStyle = 'rgba(125, 255, 206, 0.72)';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r + 12 + game.dash, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+
+    ctx.fillStyle = '#f8fbff';
+    ctx.font = '18px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillText('Score ' + game.score + ' / ' + targetScore, 18, 30);
+    ctx.fillText('Stability ' + Math.max(0, Math.floor(game.stability)) + '%', 190, 30);
+
+    if (graceFrames > 0 && game.running) {
+      ctx.fillStyle = '#7dffce';
+      ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.fillText('Grace period', 390, 30);
+    }
+
+    if (!game.running) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = game.won ? '#7dffce' : '#ff8cab';
+      ctx.font = 'bold 42px ui-sans-serif, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(game.won ? 'YOU WIN' : 'GAME OVER', WIDTH / 2, HEIGHT / 2 - 14);
+      ctx.fillStyle = '#f8fbff';
+      ctx.font = '20px ui-sans-serif, system-ui, sans-serif';
+      ctx.fillText('Press R to restart', WIDTH / 2, HEIGHT / 2 + 28);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  function frame() {
+    update();
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('keydown', function (event) {
+    if (isGameplayKey(event)) {
+      event.preventDefault();
+    }
+
+    keys[event.code] = true;
+
+    if (event.key === 'r' || event.key === 'R') {
+      reset();
+    }
+  });
+
+  window.addEventListener('keyup', function (event) {
+    keys[event.code] = false;
+  });
+
+  canvas.addEventListener('pointerdown', function (event) {
+    event.preventDefault();
+    canvas.focus();
+
+    var rect = canvas.getBoundingClientRect();
+    pointer = {
+      x: (event.clientX - rect.left) * (WIDTH / rect.width),
+      y: (event.clientY - rect.top) * (HEIGHT / rect.height)
+    };
+  });
+
+  canvas.addEventListener('pointermove', function (event) {
+    if (!pointer) return;
+
+    var rect = canvas.getBoundingClientRect();
+    pointer.x = (event.clientX - rect.left) * (WIDTH / rect.width);
+    pointer.y = (event.clientY - rect.top) * (HEIGHT / rect.height);
+  });
+
+  canvas.addEventListener('pointerup', function () {
+    pointer = null;
+  });
+
+  reset();
+  frame();
+})();`.trim(),
+  }
+}
