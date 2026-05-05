@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { AiCartridge } from '../types/cartridge'
 
 interface CartridgeDetailsProps {
@@ -7,6 +8,8 @@ interface CartridgeDetailsProps {
 }
 
 export function CartridgeDetails({ cartridge, onSave, onCopySummary }: CartridgeDetailsProps) {
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false)
+
   if (!cartridge) {
     return (
       <section className="arcade-panel p-4 sm:p-5">
@@ -74,6 +77,48 @@ export function CartridgeDetails({ cartridge, onSave, onCopySummary }: Cartridge
         <button type="button" onClick={onCopySummary} className="secondary-button">
           Copy Summary
         </button>
+      </div>
+
+      <div className="mt-5 rounded-lg border border-white/10 bg-black/20">
+        <button
+          type="button"
+          onClick={() => setDiagnosticsOpen((open) => !open)}
+          className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left text-sm font-bold text-white outline-none transition hover:bg-white/[.04] focus-visible:ring-2 focus-visible:ring-cyan-200"
+        >
+          Cartridge diagnostics
+          <span className="font-mono text-xs text-cyan-100">{diagnosticsOpen ? 'Hide' : 'Show'}</span>
+        </button>
+        {diagnosticsOpen && (
+          <div className="grid gap-3 border-t border-white/10 px-3 py-3 text-xs text-slate-300">
+            <div className="grid grid-cols-3 gap-2">
+              <span className="rounded-md bg-white/[.04] px-2 py-2">HTML {cartridge.html.length}</span>
+              <span className="rounded-md bg-white/[.04] px-2 py-2">CSS {cartridge.css.length}</span>
+              <span className="rounded-md bg-white/[.04] px-2 py-2">JS {cartridge.js.length}</span>
+            </div>
+            <div>
+              <p className="manifest-label">Difficulty</p>
+              <p className="mt-1">{cartridge.estimatedDifficulty}</p>
+            </div>
+            <div>
+              <p className="manifest-label">Engine Notes</p>
+              <p className="mt-1">{cartridge.engineNotes ?? 'No engine notes returned.'}</p>
+            </div>
+            <div>
+              <p className="manifest-label">Warnings</p>
+              {cartridge.qualityWarnings?.length ? (
+                <ul className="mt-1 grid gap-1">
+                  {cartridge.qualityWarnings.map((warning) => (
+                    <li key={warning} className="rounded-md border border-amber-200/20 bg-amber-200/10 px-2 py-1 text-amber-100">
+                      {warning}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-emerald-100">No quality warnings.</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </section>
   )

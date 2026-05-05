@@ -23,6 +23,8 @@ Hard restrictions:
 Generated HTML must be minimal: a root div, a canvas, and optionally small HUD markup. No script tags.
 Generated CSS must be scoped to the iframe document. No external urls. No @import.
 Generated JS must be plain browser JavaScript. No TypeScript. No modules. No imports.
+Prefer one self-contained IIFE: (function () { ... })();
+Avoid TypeScript syntax, module syntax, top-level await, and async unless it is truly necessary.
 
 The game should include:
 - A title screen or immediate instructions.
@@ -34,6 +36,24 @@ The game should include:
 - Keyboard and/or pointer controls.
 - Graceful handling of canvas size.
 - Clear readable UI.
+
+Robustness requirements:
+- Generated games must be boringly reliable before being clever.
+- Prefer 150-350 lines of readable JavaScript over huge complicated games.
+- It is better to make a simple but playable arcade game than a complex broken one.
+- Create or find canvas/root elements safely, and handle missing elements gracefully.
+- Wait for DOMContentLoaded or run only after the DOM is ready.
+- Avoid throwing uncaught errors.
+- Use simple, reliable mechanics.
+- Use requestAnimationFrame carefully and do not create multiple runaway loops.
+- Cleanly handle canvas resizing.
+- Clamp player positions to the visible play area.
+- Avoid infinite object growth; cap bullets, particles, enemies, pickups, and effects.
+- Avoid extremely small or huge speeds.
+- Avoid referencing variables before declaration.
+- Avoid complex physics that often breaks.
+- Avoid APIs blocked by the sanitizer.
+- Use defensive checks around DOM lookups and canvas context creation.
 
 Input requirements:
 - Every real-time game with movement must support both WASD and Arrow keys.
@@ -54,12 +74,19 @@ export function buildCartridgeUserPrompt(input: GenerateCartridgeRequest, repair
   const repairContext = input.repairContext
     ? `
 Repair context:
+- Repair intent: ${input.repairContext.intent ?? 'repair'}
 - Previous title: ${input.repairContext.previousTitle ?? 'unknown'}
 - Runtime or validation error: ${input.repairContext.errorMessage ?? repairIssue ?? 'unknown'}
+- Previous controls: ${(input.repairContext.previousControls ?? []).join('; ') || 'unknown'}
+- Previous objective: ${input.repairContext.previousObjective ?? 'unknown'}
+- Additional note: ${input.repairContext.note ?? 'none'}
 - Previous JS excerpt:
 ${(input.repairContext.previousJs ?? '').slice(0, 4_000)}
 
-Fix the game while keeping the same concept, theme, and basic controls. Return a complete replacement cartridge.
+If intent is repair: keep the same game concept and theme, fix the runtime error, simplify if necessary, preserve WASD/arrow support, and avoid the error that occurred.
+If intent is variant: use the same prompt/settings but make a fresh cartridge with different mechanics.
+If intent is simplify: the previous cartridge was too fragile or too complex; generate a simpler, more reliable version of the same idea.
+Return a complete replacement cartridge.
 `
     : ''
 

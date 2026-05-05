@@ -45,11 +45,16 @@ ${css}
 ${cartridge.html}
 <script>
   (function () {
+    var cartridgeCrashed = false;
     var gameplayKeys = {
       ArrowUp: true,
       ArrowDown: true,
       ArrowLeft: true,
       ArrowRight: true,
+      KeyW: true,
+      KeyA: true,
+      KeyS: true,
+      KeyD: true,
       w: true,
       a: true,
       s: true,
@@ -71,7 +76,7 @@ ${cartridge.html}
     }
 
     function isGameplayKey(event) {
-      return gameplayKeys[event.key] || event.key === " " || event.code === "Space";
+      return gameplayKeys[event.key] || gameplayKeys[event.code] || event.key === " " || event.code === "Space";
     }
 
     function focusBody() {
@@ -101,7 +106,7 @@ ${cartridge.html}
 
     document.addEventListener("keydown", function (event) {
       if (event.key === "Escape") {
-        send("GAME_BLURRED", {});
+        send("GAME_RELEASED", {});
         try { window.blur(); } catch {}
         try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch {}
         return;
@@ -113,6 +118,7 @@ ${cartridge.html}
     }, true);
 
     window.onerror = function(message, source, lineno, colno) {
+      cartridgeCrashed = true;
       send("VIBE_CARTRIDGE_ERROR", {
         message: String(message),
         line: lineno,
@@ -121,13 +127,16 @@ ${cartridge.html}
     };
 
     window.addEventListener("unhandledrejection", function(event) {
+      cartridgeCrashed = true;
       send("VIBE_CARTRIDGE_ERROR", {
         message: String(event.reason || "Unhandled promise rejection")
       });
     });
 
     setTimeout(function () {
-      send("VIBE_CARTRIDGE_READY", {});
+      if (!cartridgeCrashed) {
+        send("VIBE_CARTRIDGE_READY", {});
+      }
     }, 0);
   })();
 </script>

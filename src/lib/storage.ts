@@ -73,6 +73,21 @@ export function upsertSavedCartridge(cartridge: AiCartridge) {
   return next
 }
 
+export function markCartridgePlayed(id: string) {
+  const now = new Date().toISOString()
+  const next = loadSavedCartridges().map((cartridge) =>
+    cartridge.id === id
+      ? {
+          ...cartridge,
+          lastPlayedAt: now,
+        }
+      : cartridge,
+  )
+
+  persistSavedCartridges(next)
+  return next
+}
+
 export function deleteSavedCartridge(id: string) {
   const next = loadSavedCartridges().filter((cartridge) => cartridge.id !== id)
 

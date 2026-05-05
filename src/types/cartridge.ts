@@ -16,6 +16,9 @@ export interface AiCartridge {
   html: string
   css: string
   js: string
+  engineNotes?: string
+  qualityWarnings?: string[]
+  lastPlayedAt?: string
 }
 
 export interface CartridgeSettings {
@@ -27,6 +30,10 @@ export interface RepairContext {
   previousTitle?: string
   previousJs?: string
   errorMessage?: string
+  previousControls?: string[]
+  previousObjective?: string
+  intent?: 'repair' | 'variant' | 'simplify'
+  note?: string
 }
 
 export interface GenerateCartridgePayload extends CartridgeSettings {

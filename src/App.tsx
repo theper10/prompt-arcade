@@ -14,6 +14,7 @@ import {
   deleteSavedCartridge,
   loadSavedCartridges,
   loadSettings,
+  markCartridgePlayed,
   saveSettings,
   upsertSavedCartridge,
 } from './lib/storage'
@@ -25,6 +26,7 @@ function App() {
   const [currentCartridge, setCurrentCartridge] = useState<AiCartridge | null>(null)
   const [savedCartridges, setSavedCartridges] = useState<AiCartridge[]>(() => loadSavedCartridges())
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingLabel, setLoadingLabel] = useState('')
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [helpOpen, setHelpOpen] = useState(false)
 
@@ -46,6 +48,36 @@ function App() {
     setToasts((current) => current.filter((toast) => toast.id !== id))
   }
 
+  async function requestCartridge(
+    payload: Parameters<typeof generateCartridge>[0],
+    successMessage: string,
+    loadingMessage: string,
+  ) {
+    setIsLoading(true)
+    setLoadingLabel(loadingMessage)
+
+    try {
+      const cartridge = await generateCartridge(payload)
+
+      setCurrentCartridge(cartridge)
+      setPrompt(cartridge.prompt)
+      showToast(successMessage, 'success')
+      return cartridge
+    } catch (error) {
+      const message =
+        error instanceof PromptArcadeApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'The arcade could not generate a cartridge.'
+      showToast(message, 'error')
+      return null
+    } finally {
+      setIsLoading(false)
+      setLoadingLabel('')
+    }
+  }
+
   async function handleGenerate() {
     const cleanPrompt = prompt.trim()
 
@@ -59,22 +91,14 @@ function App() {
       return
     }
 
-    setIsLoading(true)
-
-    try {
-      const cartridge = await generateCartridge({
+    await requestCartridge(
+      {
         prompt: cleanPrompt,
         ...settings,
-      })
-
-      setCurrentCartridge(cartridge)
-      setPrompt(cartridge.prompt)
-      showToast('Cartridge generated and booted into the slot.', 'success')
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : 'The arcade could not generate a cartridge.', 'error')
-    } finally {
-      setIsLoading(false)
-    }
+      },
+      'Cartridge generated and booted into the slot.',
+      'Generating cartridge...',
+    )
   }
 
   async function handleRepair(errorMessage: string) {
@@ -82,32 +106,77 @@ function App() {
       return
     }
 
-    setIsLoading(true)
-
-    try {
-      const repaired = await generateCartridge({
+    await requestCartridge(
+      {
         prompt: currentCartridge.prompt,
         ...settings,
         repairContext: {
+          intent: 'repair',
           previousTitle: currentCartridge.title,
           previousJs: currentCartridge.js,
           errorMessage,
+          previousControls: currentCartridge.controls,
+          previousObjective: currentCartridge.objective,
         },
-      })
+      },
+      'Repair cartridge generated.',
+      'Repairing cartridge...',
+    )
+  }
 
-      setCurrentCartridge(repaired)
-      showToast('Repair cartridge generated.', 'success')
-    } catch (error) {
-      const message =
-        error instanceof PromptArcadeApiError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : 'The repair request failed.'
-      showToast(message, 'error')
-    } finally {
-      setIsLoading(false)
+  async function handleRegenerateVariant() {
+    const sourcePrompt = currentCartridge?.prompt ?? prompt.trim()
+
+    if (!sourcePrompt) {
+      showToast('Add or load a prompt before regenerating a variant.', 'error')
+      return
     }
+
+    await requestCartridge(
+      {
+        prompt: sourcePrompt,
+        ...settings,
+        repairContext: currentCartridge
+          ? {
+              intent: 'variant',
+              previousTitle: currentCartridge.title,
+              previousJs: currentCartridge.js,
+              previousControls: currentCartridge.controls,
+              previousObjective: currentCartridge.objective,
+              note: 'Generate a fresh cartridge with different mechanics from the previous one.',
+            }
+          : {
+              intent: 'variant',
+              note: 'Generate a fresh variant of this prompt.',
+            },
+      },
+      'Fresh variant generated.',
+      'Regenerating variant...',
+    )
+  }
+
+  async function handleSimplifyGame() {
+    if (!currentCartridge) {
+      showToast('Generate or load a cartridge before simplifying it.', 'error')
+      return
+    }
+
+    await requestCartridge(
+      {
+        prompt: currentCartridge.prompt,
+        ...settings,
+        repairContext: {
+          intent: 'simplify',
+          previousTitle: currentCartridge.title,
+          previousJs: currentCartridge.js,
+          previousControls: currentCartridge.controls,
+          previousObjective: currentCartridge.objective,
+          note: 'The previous cartridge was too fragile or too complex. Generate a simpler, more reliable version of the same idea.',
+        },
+      },
+      'Simpler cartridge generated.',
+      'Simplifying cartridge...',
+    )
   }
 
   function handleSaveCurrent() {
@@ -199,15 +268,27 @@ Controls: ${currentCartridge.controls.join(', ')}`
             cartridge={currentCartridge}
             isLoading={isLoading}
             onRepair={handleRepair}
+            onRegenerate={handleRegenerateVariant}
+            onSimplify={handleSimplifyGame}
             onExport={handleExportCurrent}
           />
           <SavedGallery
             savedCartridges={savedCartridges}
             activeId={currentCartridge?.id}
             onLoad={(cartridge) => {
-              setCurrentCartridge(cartridge)
+              const played = {
+                ...cartridge,
+                lastPlayedAt: new Date().toISOString(),
+              }
+
+              setCurrentCartridge(played)
               setPrompt(cartridge.prompt)
+              setSavedCartridges(markCartridgePlayed(cartridge.id))
               showToast('Saved cartridge loaded.', 'info')
+            }}
+            onClonePrompt={(nextPrompt) => {
+              setPrompt(nextPrompt)
+              showToast('Prompt cloned into the generator.', 'info')
             }}
             onDelete={handleDeleteSaved}
             onToast={showToast}
@@ -224,6 +305,7 @@ Controls: ${currentCartridge.controls.join(', ')}`
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <Toasts toasts={toasts} onDismiss={dismissToast} />
+      {loadingLabel && <span className="sr-only" aria-live="polite">{loadingLabel}</span>}
     </div>
   )
 }

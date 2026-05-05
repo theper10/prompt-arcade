@@ -1,22 +1,20 @@
 # Prompt Arcade
 
-Prompt Arcade is a full-stack web application that turns a short text prompt into a playable browser-based game cartridge.
+Prompt Arcade is a full-stack web app that turns short text prompts into playable browser game cartridges.
 
-Users describe a game idea, generate a lightweight cartridge, play it directly in the browser, save favorite cartridges locally, and export generated cartridges as standalone HTML files.
+Users can describe a game idea, generate a lightweight cartridge, play it directly in the browser, save favorite cartridges locally, and export cartridges as standalone HTML files.
 
 ## Features
 
-- Prompt-based game cartridge generation
-- Sandboxed iframe game runner
-- Lightweight browser games using HTML, CSS, and JavaScript
-- Cartridge repair/regeneration flow
-- Saved cartridge gallery using localStorage
+- Prompt-driven game cartridge generation
+- Sandboxed browser game runner
+- Playable lightweight HTML/CSS/JavaScript games
+- Save and load cartridges locally
 - Export cartridges as standalone `.html` files
-- Copyable game summaries
-- Adjustable chaos and difficulty settings
-- Mock mode for local development without API usage
+- Regenerate, repair, and simplify cartridges
+- Adjustable difficulty and chaos settings
+- Mock mode for local development without API calls
 - Responsive arcade-inspired interface
-- Backend validation and safety checks for generated code
 
 ## Tech Stack
 
@@ -26,7 +24,6 @@ Users describe a game idea, generate a lightweight cartridge, play it directly i
 - TypeScript
 - Vite
 - Tailwind CSS
-- localStorage
 
 ### Backend
 
@@ -36,28 +33,6 @@ Users describe a game idea, generate a lightweight cartridge, play it directly i
 - OpenAI API
 - Zod
 - dotenv
-- CORS
-
-## Project Structure
-
-```text
-server/
-  index.ts
-  openaiClient.ts
-  prompt.ts
-  sanitizer.ts
-  schemas.ts
-  rateLimit.ts
-  mockCartridge.ts
-
-src/
-  App.tsx
-  main.tsx
-  index.css
-  components/
-  lib/
-  types/
-```
 
 ## Getting Started
 
@@ -67,6 +42,8 @@ src/
 git clone <your-repo-url>
 cd prompt-arcade
 ```
+
+Replace `<your-repo-url>` with your actual GitHub repository URL.
 
 ### 2. Install dependencies
 
@@ -80,7 +57,7 @@ On Windows PowerShell, if script execution is blocked, use:
 npm.cmd install
 ```
 
-### 3. Create an environment file
+### 3. Create a `.env` file
 
 Create a `.env` file in the project root:
 
@@ -92,7 +69,9 @@ VITE_AI_API_BASE=http://localhost:8787
 USE_MOCK_AI=false
 ```
 
-For local development without API calls, use mock mode:
+The real `.env` file should not be committed to GitHub.
+
+For local development without API calls, enable mock mode:
 
 ```env
 USE_MOCK_AI=true
@@ -114,13 +93,13 @@ On Windows PowerShell:
 npm.cmd run dev:full
 ```
 
-The frontend will usually run at:
+The frontend usually runs at:
 
 ```text
 http://localhost:5173
 ```
 
-The backend will run at:
+The backend runs at:
 
 ```text
 http://localhost:8787
@@ -150,13 +129,13 @@ Runs the Express backend.
 npm run dev:full
 ```
 
-Runs frontend and backend together.
+Runs the frontend and backend together.
 
 ```bash
 npm run build
 ```
 
-Builds the frontend for production.
+Builds the app for production.
 
 ```bash
 npm run preview
@@ -174,15 +153,15 @@ Runs linting if configured.
 
 | Variable | Description |
 |---|---|
-| `OPENAI_API_KEY` | API key used by the backend to request cartridge generation |
-| `OPENAI_MODEL` | Model used for generation |
+| `OPENAI_API_KEY` | API key used by the backend |
+| `OPENAI_MODEL` | Model used for cartridge generation |
 | `PORT` | Backend server port |
 | `VITE_AI_API_BASE` | Frontend URL for the backend API |
 | `USE_MOCK_AI` | Enables mock cartridge generation without API calls |
 
 ## Mock Mode
 
-Mock mode lets you run the project without using external API calls.
+Mock mode lets the app run without making external API calls.
 
 Set this in `.env`:
 
@@ -196,36 +175,29 @@ Then run:
 npm run dev:full
 ```
 
-This is useful for demos, development, and testing the interface without consuming API credits.
+This is useful for testing the interface, demoing the app locally, or working without API credits.
 
-## Security Model
+## Runtime Safety
 
-Generated cartridges run inside a sandboxed iframe.
+Cartridges run inside a sandboxed iframe instead of being injected directly into the React app.
 
-The app uses several layers of protection:
+The backend also validates generated cartridge content before sending it to the frontend. The API key is only used server-side and is never exposed in the browser.
 
-- The API key is only used on the backend
-- Generated cartridge code is never injected into the React app directly
-- Cartridges run inside an iframe with restricted sandbox permissions
-- Server-side validation checks generated HTML, CSS, and JavaScript
-- Suspicious browser APIs and external resource loading are blocked
-- The app supports cartridge crash handling and repair
+The sandboxing approach is designed for local development and portfolio/demo usage.
 
-This is intended as a practical sandboxing approach for a portfolio-scale project. A production system that runs untrusted code at scale would require additional isolation and security hardening.
-
-## Cartridge Export
+## Exporting Cartridges
 
 Generated cartridges can be exported as standalone HTML files.
 
-This allows a generated game to be saved and opened directly in a browser.
+This makes it possible to save a generated game and open it directly in a browser.
 
-## Deployment Notes
+## Deployment
 
 This project includes both a frontend and a backend.
 
 Static hosting alone, such as GitHub Pages, is not enough for full functionality because cartridge generation requires a backend API.
 
-Recommended deployment options:
+Recommended deployment options include:
 
 - Vercel
 - Render
@@ -234,20 +206,15 @@ Recommended deployment options:
 - Azure App Service
 - Netlify with serverless functions
 
-For a simple portfolio deployment, host the frontend and backend together on a platform that supports Node.js servers.
-
-## Portfolio Notes
-
-This project demonstrates:
+## What This Project Demonstrates
 
 - Full-stack TypeScript development
-- React application architecture
+- React application structure
 - Express API design
 - Environment-based configuration
 - API integration
-- Runtime validation with Zod
+- Zod validation
 - Sandboxed iframe execution
-- Defensive handling of generated code
 - Local persistence
 - Responsive UI design
 - Exportable browser-based artifacts

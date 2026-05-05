@@ -60,6 +60,8 @@ function buildCartridge(input: GenerateCartridgeRequest, generated: GeneratedCar
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     prompt: input.prompt,
+    engineNotes: 'Validated with Prompt Arcade safety and static quality checks.',
+    qualityWarnings: [],
     ...generated,
   }
 }

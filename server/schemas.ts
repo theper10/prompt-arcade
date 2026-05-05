@@ -20,6 +20,8 @@ export interface AiCartridge {
   html: string
   css: string
   js: string
+  engineNotes?: string
+  qualityWarnings?: string[]
 }
 
 export const repairContextSchema = z
@@ -27,6 +29,10 @@ export const repairContextSchema = z
     previousTitle: z.string().trim().max(80).optional(),
     previousJs: z.string().max(80_000).optional(),
     errorMessage: z.string().trim().max(1_000).optional(),
+    previousControls: z.array(z.string().trim().max(120)).max(8).optional(),
+    previousObjective: z.string().trim().max(280).optional(),
+    intent: z.enum(['repair', 'variant', 'simplify']).optional(),
+    note: z.string().trim().max(1_000).optional(),
   })
   .strict()
 

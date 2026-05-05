@@ -1,5 +1,10 @@
 import { generatedCartridgeSchema, type GeneratedCartridge } from './schemas'
 
+export type SanitizedCartridge = GeneratedCartridge & {
+  engineNotes: string
+  qualityWarnings: string[]
+}
+
 export class SafetyValidationError extends Error {
   constructor(message: string) {
     super(message)
@@ -88,11 +93,99 @@ function assertJsSafe(js: string) {
   assertNoForbiddenContent('JavaScript', js)
 }
 
+function hasRootOrCanvas(html: string) {
+  return /<(canvas|div|main|section|button)\b/i.test(html)
+}
+
+function assertNoParentUi(html: string) {
+  const lower = html.toLowerCase()
+  const forbiddenParentUi = ['game focused', 'click game to focus', 'keyboard captured', 'press esc to release']
+  const found = forbiddenParentUi.find((phrase) => lower.includes(phrase))
+
+  if (found) {
+    throw new SafetyValidationError(`HTML appears to include parent runner UI: ${found}`)
+  }
+}
+
+function assertNoObviousJsSyntaxLeak(js: string) {
+  if (/```/.test(js)) {
+    throw new SafetyValidationError('JavaScript contains markdown fences.')
+  }
+
+  if (/^\s*(import|export)\s/m.test(js)) {
+    throw new SafetyValidationError('JavaScript contains import/export syntax.')
+  }
+
+  if (
+    /\b(function\s+\w*\s*\([^)]*:\s*\w+)/.test(js) ||
+    /\([^)]*:\s*(number|string|boolean|unknown|any|void)\s*[),]/.test(js) ||
+    /\b(?:let|const|var)\s+\w+\s*:\s*(number|string|boolean|unknown|any)\b/.test(js)
+  ) {
+    throw new SafetyValidationError('JavaScript appears to contain TypeScript type annotations.')
+  }
+}
+
+function runStaticQualityChecks(cartridge: GeneratedCartridge) {
+  const warnings: string[] = []
+  const combinedMetadata = [
+    cartridge.title,
+    cartridge.subtitle,
+    cartridge.description,
+    cartridge.objective,
+    cartridge.winCondition,
+    cartridge.loseCondition,
+    cartridge.controls.join(' '),
+    cartridge.tags.join(' '),
+  ].join(' ')
+  const combinedCode = `${cartridge.html}\n${cartridge.css}\n${cartridge.js}`
+
+  if (!hasRootOrCanvas(cartridge.html)) {
+    throw new SafetyValidationError('HTML must include a root element or canvas.')
+  }
+
+  assertNoParentUi(cartridge.html)
+  assertNoObviousJsSyntaxLeak(cartridge.js)
+
+  if (cartridge.js.length < 600) {
+    throw new SafetyValidationError('JavaScript is too small to be a complete playable cartridge.')
+  }
+
+  if (!/(requestAnimationFrame|addEventListener|setInterval|onclick|onpointer|onkeydown)/i.test(cartridge.js)) {
+    throw new SafetyValidationError('JavaScript does not contain a clear loop or interaction path.')
+  }
+
+  if (!/(score|status|win|lose|game over|victory|objective|health|lives|time|timer)/i.test(`${combinedMetadata}\n${cartridge.js}`)) {
+    throw new SafetyValidationError('Cartridge lacks obvious score, status, win, or lose handling.')
+  }
+
+  if (!/\b(function\s*\(\)\s*\{|=>|DOMContentLoaded|addEventListener\(['"]load|addEventListener\(['"]DOMContentLoaded)/.test(cartridge.js)) {
+    warnings.push('JS does not clearly wrap startup in a self-contained function or DOM-ready handler.')
+  }
+
+  if (!/requestAnimationFrame/i.test(cartridge.js)) {
+    warnings.push('No requestAnimationFrame loop detected; this may be interaction-only.')
+  }
+
+  if (!/(ArrowUp|ArrowDown|ArrowLeft|ArrowRight|KeyW|KeyA|KeyS|KeyD|WASD|wasd)/.test(combinedCode)) {
+    warnings.push('Keyboard movement support is not obvious in the cartridge code.')
+  }
+
+  if (!/(Space|event\.key === ['"] ['"]|event\.code === ['"]Space['"])/.test(combinedCode)) {
+    warnings.push('Space primary-action support is not obvious.')
+  }
+
+  if (!/(pointer|touch|mouse|click|tap)/i.test(combinedCode)) {
+    warnings.push('Pointer or touch support is not obvious.')
+  }
+
+  return warnings.slice(0, 6)
+}
+
 function normalizeStringArray(values: string[]) {
   return values.map((value) => value.trim()).filter(Boolean)
 }
 
-export function sanitizeModelOutput(raw: string): GeneratedCartridge {
+export function sanitizeModelOutput(raw: string): SanitizedCartridge {
   const parsed = extractJson(raw)
   const firstPass = generatedCartridgeSchema.safeParse(parsed)
 
@@ -126,6 +219,11 @@ export function sanitizeModelOutput(raw: string): GeneratedCartridge {
   assertHtmlSafe(finalPass.data.html)
   assertCssSafe(finalPass.data.css)
   assertJsSafe(finalPass.data.js)
+  const qualityWarnings = runStaticQualityChecks(finalPass.data)
 
-  return finalPass.data
+  return {
+    ...finalPass.data,
+    engineNotes: 'Validated with Prompt Arcade safety and static quality checks.',
+    qualityWarnings,
+  }
 }
