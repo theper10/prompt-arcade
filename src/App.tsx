@@ -8,7 +8,7 @@ import { PromptPanel } from './components/PromptPanel'
 import { SavedGallery } from './components/SavedGallery'
 import { SettingsPanel } from './components/SettingsPanel'
 import { Toasts, type ToastMessage } from './components/Toasts'
-import { generateCartridge, getApiBase, PromptArcadeApiError } from './lib/api'
+import { generateCartridge, PromptArcadeApiError } from './lib/api'
 import { downloadCartridgeHtml } from './lib/download'
 import {
   deleteSavedCartridge,
