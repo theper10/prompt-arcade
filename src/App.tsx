@@ -298,8 +298,7 @@ Controls: ${currentCartridge.controls.join(', ')}`
 
       <footer className="mx-auto w-full max-w-[1500px] px-4 pb-8 text-sm text-slate-500 sm:px-6 lg:px-8">
         <div className="border-t border-white/10 pt-5">
-          Prompt Arcade is a portfolio-ready full-stack AI app: React/Vite frontend, Express API, server-side OpenAI
-          calls, sanitizer checks, sandboxed cartridges, and local saved games. API base: {getApiBase()}.
+          Turn weird ideas into tiny playable browser games.
         </div>
       </footer>
 

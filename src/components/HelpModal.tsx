@@ -14,7 +14,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="eyebrow">operator notes</p>
-            <h2 className="mt-1 text-2xl font-black text-white">How Prompt Arcade works</h2>
+            <h2 className="mt-1 text-2xl font-black text-white">How to use Prompt Arcade</h2>
           </div>
           <button type="button" onClick={onClose} className="tool-button">
             Close
@@ -23,20 +23,16 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
 
         <div className="mt-5 grid gap-4 text-sm leading-6 text-slate-300">
           <p>
-            Prompt Arcade sends your prompt to a local Node/Express API. The API asks OpenAI to generate a small,
-            self-contained HTML/CSS/JavaScript game cartridge.
+            Describe a tiny game idea, tune the cartridge settings, then generate a playable browser game.
           </p>
           <p>
-            Generated games run only inside a sandboxed iframe. The frontend never receives your OpenAI API key, and
-            generated JavaScript is not injected into the React app.
+            After a cartridge boots, click the game frame to focus it. Most games use WASD, Arrow keys, Space, or mouse controls. The controls for each cartridge are shown next to the game.
           </p>
           <p>
-            AI-made cartridges can still crash or produce awkward game logic. Use Reload, Repair with AI, or generate a
-            fresh cartridge when a game misbehaves.
+            Generated games can be strange sometimes. If something breaks or feels unfair, try Repair, Simplify, Regenerate Variant, or Fix Gameplay.
           </p>
           <p>
-            Saved cartridges live in this browser through localStorage. Export creates a standalone HTML file you can
-            run locally.
+            Saved cartridges stay in this browser. Export creates a standalone HTML file you can open later.
           </p>
         </div>
       </div>
