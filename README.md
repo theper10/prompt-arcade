@@ -39,11 +39,9 @@ Users can describe a game idea, generate a lightweight cartridge, play it direct
 ### 1. Clone the repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/theper10/prompt-arcade.git
 cd prompt-arcade
 ```
-
-Replace `<your-repo-url>` with your actual GitHub repository URL.
 
 ### 2. Install dependencies
 
