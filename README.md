@@ -12,6 +12,14 @@ https://theper10.github.io/prompt-arcade/
 
 The live demo runs in static demo mode using local sample cartridges. For live backend-powered generation, run the project locally with your own API key.
 
+## Project Status
+
+Prompt Arcade is an experimental proof-of-concept for prompt-driven browser game generation.
+
+The app demonstrates how a full-stack web application can generate, sandbox, play, save, and export lightweight game cartridges directly in the browser. Because the games are generated dynamically, results can vary: some cartridges are surprisingly playable, while others may contain bugs, unclear mechanics, or broken gameplay.
+
+The project focuses on exploring the technical pipeline around dynamic generation, sandboxed execution, local persistence, and cartridge export. For best results, simple arcade-style prompts tend to work better than complex simulation-style prompts.
+
 ## Features
 
 - Prompt-driven game cartridge generation
