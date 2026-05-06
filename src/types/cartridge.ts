@@ -32,7 +32,7 @@ export interface RepairContext {
   errorMessage?: string
   previousControls?: string[]
   previousObjective?: string
-  intent?: 'repair' | 'variant' | 'simplify'
+  intent?: 'repair' | 'variant' | 'simplify' | 'gameplay_fix'
   note?: string
 }
 

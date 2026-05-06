@@ -26,10 +26,10 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             Describe a tiny game idea, tune the cartridge settings, then generate a playable browser game.
           </p>
           <p>
-            After a cartridge boots, click the game frame to focus it. Most games use WASD, Arrow keys, Space, or mouse controls. The controls for each cartridge are shown next to the game.
+            After a cartridge boots, click the game frame to focus it. Prompt Arcade uses desktop-first controls: WASD, Arrow keys, Space, and mouse or pointer input. Touch controls only appear when requested.
           </p>
           <p>
-            Generated games can be strange sometimes. If something breaks or feels unfair, try Repair, Simplify, Regenerate Variant, or Fix Gameplay.
+            Generated games can be strange sometimes. Repair handles crashes or validation errors. Fix Gameplay repairs unclear or unfair games.
           </p>
           <p>
             Saved cartridges stay in this browser. Export creates a standalone HTML file you can open later.

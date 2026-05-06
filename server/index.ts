@@ -66,6 +66,19 @@ function buildCartridge(input: GenerateCartridgeRequest, generated: GeneratedCar
   }
 }
 
+function shouldAttemptQualityRepair(generated: GeneratedCartridge & { qualityWarnings?: string[] }) {
+  return generated.qualityWarnings?.some((warning) => warning.startsWith('Quality repair trigger:')) ?? false
+}
+
+function qualityRepairIssue(generated: GeneratedCartridge & { qualityWarnings?: string[] }) {
+  const warnings = generated.qualityWarnings?.filter((warning) => warning.startsWith('Quality repair trigger:')) ?? []
+
+  return `Static quality checks found likely gameplay input or viewport problems:
+${warnings.map((warning) => `- ${warning.replace(/^Quality repair trigger:\s*/, '')}`).join('\n')}
+
+Generate a complete replacement cartridge that keeps the theme but fixes these issues. Prefer desktop-first controls, one input event type per action, 150-250ms action cooldowns, and fixed WIDTH = 800 / HEIGHT = 500 gameplay logic.`
+}
+
 async function generateAndSanitize(input: GenerateCartridgeRequest) {
   if (isMockMode()) {
     return createMockCartridge(input)
@@ -74,7 +87,19 @@ async function generateAndSanitize(input: GenerateCartridgeRequest) {
   let raw = await generateCartridgeWithOpenAI(input)
 
   try {
-    return sanitizeModelOutput(raw)
+    const generated = sanitizeModelOutput(raw)
+
+    if (!shouldAttemptQualityRepair(generated)) {
+      return generated
+    }
+
+    try {
+      const repairedRaw = await generateCartridgeWithOpenAI(input, qualityRepairIssue(generated))
+
+      return sanitizeModelOutput(repairedRaw)
+    } catch {
+      return generated
+    }
   } catch (error) {
     if (!(error instanceof SafetyValidationError)) {
       throw error

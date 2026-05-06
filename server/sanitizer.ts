@@ -138,6 +138,11 @@ function runStaticQualityChecks(cartridge: GeneratedCartridge) {
     cartridge.tags.join(' '),
   ].join(' ')
   const combinedCode = `${cartridge.html}\n${cartridge.css}\n${cartridge.js}`
+  const js = cartridge.js
+  const hasClickHandler = /addEventListener\s*\(\s*['"]click['"]|\.onclick\s*=/.test(js)
+  const hasPointerDownHandler = /addEventListener\s*\(\s*['"]pointerdown['"]|\.onpointerdown\s*=/.test(js)
+  const hasMouseDownHandler = /addEventListener\s*\(\s*['"]mousedown['"]|\.onmousedown\s*=/.test(js)
+  const hasTouchStartHandler = /addEventListener\s*\(\s*['"]touchstart['"]|\.ontouchstart\s*=/.test(js)
 
   if (!hasRootOrCanvas(cartridge.html)) {
     throw new SafetyValidationError('HTML must include a root element or canvas.')
@@ -174,11 +179,46 @@ function runStaticQualityChecks(cartridge: GeneratedCartridge) {
     warnings.push('Space primary-action support is not obvious.')
   }
 
-  if (!/(pointer|touch|mouse|click|tap)/i.test(combinedCode)) {
-    warnings.push('Pointer or touch support is not obvious.')
+  if (!/(pointer|mouse|click)/i.test(combinedCode)) {
+    warnings.push('Pointer or mouse support is not obvious.')
   }
 
-  return warnings.slice(0, 6)
+  if (hasClickHandler && hasPointerDownHandler) {
+    warnings.push('Quality repair trigger: JS contains both click and pointerdown handlers, which can duplicate one action.')
+  }
+
+  if (hasMouseDownHandler && hasPointerDownHandler) {
+    warnings.push('Quality repair trigger: JS contains both mousedown and pointerdown handlers, which can duplicate one action.')
+  }
+
+  if (hasTouchStartHandler) {
+    warnings.push('Quality repair trigger: JS contains touchstart even though touch/mobile controls are opt-in only.')
+  }
+
+  if (hasTouchStartHandler && (hasClickHandler || hasPointerDownHandler || hasMouseDownHandler)) {
+    warnings.push('Quality repair trigger: JS mixes touchstart with mouse/pointer/click handlers.')
+  }
+
+  if (hasClickHandler && hasMouseDownHandler) {
+    warnings.push('Quality repair trigger: JS contains both click and mousedown handlers, which can duplicate one action.')
+  }
+
+  if (/window\.inner(?:Width|Height)/.test(js)) {
+    warnings.push('Quality repair trigger: JS uses window.innerWidth or window.innerHeight for game dimensions instead of fixed 800x500 logic.')
+  }
+
+  return warnings
+    .toSorted((left, right) => {
+      const leftIsRepair = left.startsWith('Quality repair trigger:')
+      const rightIsRepair = right.startsWith('Quality repair trigger:')
+
+      if (leftIsRepair === rightIsRepair) {
+        return 0
+      }
+
+      return leftIsRepair ? -1 : 1
+    })
+    .slice(0, 6)
 }
 
 function normalizeStringArray(values: string[]) {

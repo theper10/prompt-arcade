@@ -31,7 +31,7 @@ export const repairContextSchema = z
     errorMessage: z.string().trim().max(1_000).optional(),
     previousControls: z.array(z.string().trim().max(120)).max(8).optional(),
     previousObjective: z.string().trim().max(280).optional(),
-    intent: z.enum(['repair', 'variant', 'simplify']).optional(),
+    intent: z.enum(['repair', 'variant', 'simplify', 'gameplay_fix']).optional(),
     note: z.string().trim().max(1_000).optional(),
   })
   .strict()

@@ -49,7 +49,7 @@ export function createMockCartridge(input: GenerateCartridgeRequest): GeneratedC
     controls: [
       'Move: WASD or Arrow keys',
       'Primary action: hold Space for a shield dash',
-      'Mouse/touch: click or tap to dash toward a point',
+      'Pointer: click inside the game to dash toward a point',
       'Restart: press R',
     ],
     objective: `Collect ${targetScore} prompt shards before the stability meter reaches zero.`,
@@ -63,7 +63,7 @@ export function createMockCartridge(input: GenerateCartridgeRequest): GeneratedC
     <strong>${escapedTitle}</strong>
     <span id="status">Collect shards. Avoid hazards.</span>
   </div>
-  <canvas id="game" width="960" height="540" aria-label="${escapedTitle} game canvas"></canvas>
+  <canvas id="game" width="800" height="500" aria-label="${escapedTitle} game canvas" tabindex="0"></canvas>
 </div>`.trim(),
     css: `
 .pa-game-shell {
@@ -95,8 +95,10 @@ export function createMockCartridge(input: GenerateCartridgeRequest): GeneratedC
 .pa-hud span { color: #ffe08a; text-align: right; }
 canvas {
   width: 100%;
-  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 8 / 5;
   min-height: 320px;
+  display: block;
   border: 1px solid rgba(255, 79, 216, .45);
   border-radius: 8px;
   background: #07080d;
@@ -104,6 +106,8 @@ canvas {
 }`.trim(),
     js: `
 (function () {
+  var WIDTH = 800;
+  var HEIGHT = 500;
   var canvas = document.getElementById('game');
   var ctx = canvas.getContext('2d');
   var status = document.getElementById('status');
@@ -114,54 +118,59 @@ canvas {
   var keys = {};
   var pointer = null;
   var game = {};
+  var graceFrames = 90;
 
   function rand() {
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 4294967296;
   }
 
-  function resize() {
-    var rect = canvas.getBoundingClientRect();
-    var scale = Math.max(1, Math.floor(window.devicePixelRatio || 1));
-    canvas.width = Math.max(640, Math.floor(rect.width * scale));
-    canvas.height = Math.max(360, Math.floor(rect.height * scale));
-  }
-
   function reset() {
+    canvas.width = WIDTH;
+    canvas.height = HEIGHT;
     game = {
       running: true,
       won: false,
       lost: false,
       score: 0,
       stability: 100,
-      player: { x: canvas.width / 2, y: canvas.height / 2, r: 15, vx: 0, vy: 0 },
+      player: { x: WIDTH / 2, y: HEIGHT / 2, r: 15, vx: 0, vy: 0 },
       dash: 0,
       shard: makeShard(),
       hazards: []
     };
     for (var i = 0; i < hazardCount; i += 1) {
-      game.hazards.push(makeHazard());
+      game.hazards.push(makeHazardAwayFromPlayer());
     }
+    graceFrames = 90;
     status.textContent = 'Collect shards. Avoid hazards.';
   }
 
   function makeShard() {
     return {
-      x: 50 + rand() * Math.max(100, canvas.width - 100),
-      y: 70 + rand() * Math.max(100, canvas.height - 140),
+      x: 50 + rand() * (WIDTH - 100),
+      y: 70 + rand() * (HEIGHT - 140),
       r: 11 + rand() * 7
     };
   }
 
-  function makeHazard() {
-    var speed = 1.5 + rand() * 2.5 + ${input.chaos} / 80;
-    return {
-      x: 40 + rand() * Math.max(80, canvas.width - 80),
-      y: 80 + rand() * Math.max(100, canvas.height - 160),
-      r: 14 + rand() * 12,
-      vx: (rand() > 0.5 ? 1 : -1) * speed,
-      vy: (rand() > 0.5 ? 1 : -1) * speed
-    };
+  function makeHazardAwayFromPlayer() {
+    var hazard;
+    var tries = 0;
+
+    do {
+      var speed = 1.5 + rand() * 2.5 + ${input.chaos} / 80;
+      hazard = {
+        x: 40 + rand() * (WIDTH - 80),
+        y: 80 + rand() * (HEIGHT - 160),
+        r: 14 + rand() * 12,
+        vx: (rand() > 0.5 ? 1 : -1) * speed,
+        vy: (rand() > 0.5 ? 1 : -1) * speed
+      };
+      tries += 1;
+    } while (distance({ x: WIDTH / 2, y: HEIGHT / 2 }, hazard) < 150 && tries < 20);
+
+    return hazard;
   }
 
   function distance(a, b) {
@@ -194,16 +203,16 @@ canvas {
     game.dash = Math.max(0, game.dash - 1);
     player.vx = (player.vx + ax * 0.7 * dashPower) * 0.88;
     player.vy = (player.vy + ay * 0.7 * dashPower) * 0.88;
-    player.x = Math.max(player.r, Math.min(canvas.width - player.r, player.x + player.vx));
-    player.y = Math.max(player.r + 38, Math.min(canvas.height - player.r, player.y + player.vy));
+    player.x = Math.max(player.r, Math.min(WIDTH - player.r, player.x + player.vx));
+    player.y = Math.max(player.r + 38, Math.min(HEIGHT - player.r, player.y + player.vy));
 
     for (var i = 0; i < game.hazards.length; i += 1) {
       var hazard = game.hazards[i];
       hazard.x += hazard.vx;
       hazard.y += hazard.vy;
-      if (hazard.x < hazard.r || hazard.x > canvas.width - hazard.r) hazard.vx *= -1;
-      if (hazard.y < hazard.r + 38 || hazard.y > canvas.height - hazard.r) hazard.vy *= -1;
-      if (distance(player, hazard) < player.r + hazard.r) {
+      if (hazard.x < hazard.r || hazard.x > WIDTH - hazard.r) hazard.vx *= -1;
+      if (hazard.y < hazard.r + 38 || hazard.y > HEIGHT - hazard.r) hazard.vy *= -1;
+      if (graceFrames <= 0 && distance(player, hazard) < player.r + hazard.r) {
         if (game.dash > 0) {
           hazard.vx *= -1.35;
           hazard.vy *= -1.35;
@@ -214,6 +223,8 @@ canvas {
         }
       }
     }
+
+    graceFrames = Math.max(0, graceFrames - 1);
 
     if (distance(player, game.shard) < player.r + game.shard.r) {
       game.score += 1;
@@ -236,22 +247,22 @@ canvas {
   }
 
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
     ctx.fillStyle = '#080a10';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
     ctx.strokeStyle = 'rgba(125, 255, 206, 0.11)';
     ctx.lineWidth = 1;
-    for (var x = 0; x < canvas.width; x += 34) {
+    for (var x = 0; x < WIDTH; x += 34) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
+      ctx.lineTo(x, HEIGHT);
       ctx.stroke();
     }
-    for (var y = 0; y < canvas.height; y += 34) {
+    for (var y = 0; y < HEIGHT; y += 34) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
+      ctx.lineTo(WIDTH, y);
       ctx.stroke();
     }
 
@@ -293,17 +304,22 @@ canvas {
     ctx.font = '18px ui-monospace, SFMono-Regular, Menlo, monospace';
     ctx.fillText('Score ' + game.score + ' / ' + targetScore, 18, 30);
     ctx.fillText('Stability ' + Math.max(0, Math.floor(game.stability)) + '%', 180, 30);
+    if (graceFrames > 0 && game.running) {
+      ctx.fillStyle = '#7dffce';
+      ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.fillText('Grace period', 390, 30);
+    }
 
     if (!game.running) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
       ctx.fillStyle = game.won ? '#7dffce' : '#ff8cab';
       ctx.font = 'bold 42px ui-sans-serif, system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(game.won ? 'YOU WIN' : 'GAME OVER', canvas.width / 2, canvas.height / 2 - 14);
+      ctx.fillText(game.won ? 'YOU WIN' : 'GAME OVER', WIDTH / 2, HEIGHT / 2 - 14);
       ctx.fillStyle = '#f8fbff';
       ctx.font = '20px ui-sans-serif, system-ui, sans-serif';
-      ctx.fillText('Press R to restart', canvas.width / 2, canvas.height / 2 + 28);
+      ctx.fillText('Press R to restart', WIDTH / 2, HEIGHT / 2 + 28);
       ctx.textAlign = 'left';
     }
   }
@@ -314,10 +330,6 @@ canvas {
     requestAnimationFrame(frame);
   }
 
-  window.addEventListener('resize', function () {
-    resize();
-    reset();
-  });
   window.addEventListener('keydown', function (event) {
     if (event.key === ' ' || event.code === 'Space' || event.key.indexOf('Arrow') === 0 || 'wasdWASD'.indexOf(event.key) >= 0) {
       event.preventDefault();
@@ -331,23 +343,24 @@ canvas {
     keys[event.code] = false;
   });
   canvas.addEventListener('pointerdown', function (event) {
+    event.preventDefault();
+    canvas.focus();
     var rect = canvas.getBoundingClientRect();
     pointer = {
-      x: (event.clientX - rect.left) * (canvas.width / rect.width),
-      y: (event.clientY - rect.top) * (canvas.height / rect.height)
+      x: (event.clientX - rect.left) * (WIDTH / rect.width),
+      y: (event.clientY - rect.top) * (HEIGHT / rect.height)
     };
   });
   canvas.addEventListener('pointermove', function (event) {
     if (!pointer) return;
     var rect = canvas.getBoundingClientRect();
-    pointer.x = (event.clientX - rect.left) * (canvas.width / rect.width);
-    pointer.y = (event.clientY - rect.top) * (canvas.height / rect.height);
+    pointer.x = (event.clientX - rect.left) * (WIDTH / rect.width);
+    pointer.y = (event.clientY - rect.top) * (HEIGHT / rect.height);
   });
   canvas.addEventListener('pointerup', function () {
     pointer = null;
   });
 
-  resize();
   reset();
   frame();
 })();`.trim(),

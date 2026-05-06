@@ -12,6 +12,7 @@ interface CartridgeRunnerProps {
   onRepair: (errorMessage: string) => void
   onRegenerate: () => void
   onSimplify: () => void
+  onFixGameplay: () => void
   onExport: () => void
 }
 
@@ -56,18 +57,16 @@ export function CartridgeRunner({
   onRepair,
   onRegenerate,
   onSimplify,
+  onFixGameplay,
   onExport,
 }: CartridgeRunnerProps) {
   const runnerRef = useRef<HTMLElement | null>(null)
   const mainFrameRef = useRef<HTMLDivElement | null>(null)
-  const theaterFrameRef = useRef<HTMLDivElement | null>(null)
   const mainIframeRef = useRef<HTMLIFrameElement | null>(null)
-  const theaterIframeRef = useRef<HTMLIFrameElement | null>(null)
   const [bootState, setBootState] = useState<BootState>('idle')
   const [runtimeError, setRuntimeError] = useState('')
   const [iframeKey, setIframeKey] = useState(0)
   const [gameActive, setGameActive] = useState(false)
-  const [theaterOpen, setTheaterOpen] = useState(false)
 
   const srcDoc = useMemo(() => (cartridge ? buildCartridgeDocument(cartridge) : ''), [cartridge])
   const activeStatus = statusFor(bootState, gameActive)
@@ -81,7 +80,6 @@ export function CartridgeRunner({
   const releaseGameFocus = useCallback(() => {
     setGameActive(false)
     mainIframeRef.current?.blur()
-    theaterIframeRef.current?.blur()
 
     try {
       runnerRef.current?.focus({ preventScroll: true })
@@ -95,7 +93,7 @@ export function CartridgeRunner({
       return
     }
 
-    const targetIframe = iframe ?? (theaterOpen ? theaterIframeRef.current : mainIframeRef.current)
+    const targetIframe = iframe ?? mainIframeRef.current
 
     setGameActive(true)
 
@@ -110,7 +108,7 @@ export function CartridgeRunner({
     } catch {
       // Sandboxed srcDoc focus access can be unavailable in some browsers.
     }
-  }, [cartridge, theaterOpen])
+  }, [cartridge])
 
   useEffect(() => {
     if (!cartridge) {
@@ -122,10 +120,7 @@ export function CartridgeRunner({
     }, 8000)
 
     function handleMessage(event: MessageEvent<CartridgeMessage>) {
-      const fromCurrentIframe =
-        event.source === mainIframeRef.current?.contentWindow || event.source === theaterIframeRef.current?.contentWindow
-
-      if (!fromCurrentIframe) {
+      if (event.source !== mainIframeRef.current?.contentWindow) {
         return
       }
 
@@ -168,12 +163,6 @@ export function CartridgeRunner({
         if (gameActive) {
           event.preventDefault()
           releaseGameFocus()
-          return
-        }
-
-        if (theaterOpen) {
-          event.preventDefault()
-          setTheaterOpen(false)
         }
 
         return
@@ -187,13 +176,13 @@ export function CartridgeRunner({
     window.addEventListener('keydown', handleKeyDown, { capture: true })
 
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [gameActive, releaseGameFocus, theaterOpen])
+  }, [gameActive, releaseGameFocus])
 
   useEffect(() => {
     function syncIframeFocus() {
       const activeElement = document.activeElement
 
-      if (activeElement === mainIframeRef.current || activeElement === theaterIframeRef.current) {
+      if (activeElement === mainIframeRef.current) {
         setGameActive(true)
       }
     }
@@ -217,9 +206,8 @@ export function CartridgeRunner({
     function handlePointerDown(event: PointerEvent) {
       const target = event.target
       const insideMain = target instanceof Node && mainFrameRef.current?.contains(target)
-      const insideTheater = target instanceof Node && theaterFrameRef.current?.contains(target)
 
-      if (insideMain || insideTheater) {
+      if (insideMain) {
         return
       }
 
@@ -238,21 +226,7 @@ export function CartridgeRunner({
     setIframeKey((key) => key + 1)
   }
 
-  function openTheater() {
-    if (!cartridge) {
-      return
-    }
-
-    setTheaterOpen(true)
-    window.setTimeout(() => focusGame(theaterIframeRef.current), 50)
-  }
-
-  function closeTheater() {
-    releaseGameFocus()
-    setTheaterOpen(false)
-  }
-
-  function renderToolbar(isTheater: boolean, iframeRef: RefObject<HTMLIFrameElement | null>) {
+  function renderToolbar(iframeRef: RefObject<HTMLIFrameElement | null>) {
     return (
       <div className="mb-3 rounded-lg border border-white/10 bg-black/24 p-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -269,11 +243,6 @@ export function CartridgeRunner({
               >
                 {activeStatus}
               </span>
-              {isTheater && (
-                <span className="rounded-full border border-fuchsia-200/35 bg-fuchsia-300/10 px-3 py-1 font-mono text-xs font-bold uppercase text-fuchsia-100">
-                  Theater Mode
-                </span>
-              )}
             </div>
             <p className="text-sm text-slate-400">
               {gameActive
@@ -303,18 +272,12 @@ export function CartridgeRunner({
             <button type="button" disabled={!cartridge || isLoading} onClick={onSimplify} className="tool-button">
               Simplify Game
             </button>
+            <button type="button" disabled={!cartridge || isLoading} onClick={onFixGameplay} className="tool-button">
+              Fix Gameplay
+            </button>
             <button type="button" disabled={!cartridge} onClick={onExport} className="tool-button">
               Export HTML
             </button>
-            {isTheater ? (
-              <button type="button" onClick={closeTheater} className="tool-button">
-                Close Theater
-              </button>
-            ) : (
-              <button type="button" disabled={!cartridge} onClick={openTheater} className="tool-button">
-                Theater Mode
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -345,19 +308,15 @@ export function CartridgeRunner({
     )
   }
 
-  function renderViewport(
-    frameRef: RefObject<HTMLDivElement | null>,
-    iframeRef: RefObject<HTMLIFrameElement | null>,
-    isTheater: boolean,
-  ) {
+  function renderViewport(frameRef: RefObject<HTMLDivElement | null>, iframeRef: RefObject<HTMLIFrameElement | null>) {
     return (
       <div
         ref={frameRef}
-        data-testid={isTheater ? 'theater-game-frame' : 'game-frame'}
+        data-testid="game-frame"
         onPointerDownCapture={() => focusGame(iframeRef.current)}
         className={cn(
           'relative flex-1 overflow-hidden rounded-lg border bg-black/45 transition',
-          isTheater ? 'min-h-[70vh]' : 'min-h-[420px]',
+          'min-h-[420px]',
           gameActive
             ? 'border-cyan-200/80 ring-2 ring-cyan-200/55 shadow-[0_0_34px_rgba(93,246,255,.22)]'
             : 'border-white/10',
@@ -365,9 +324,9 @@ export function CartridgeRunner({
       >
         {cartridge ? (
           <iframe
-            key={`${isTheater ? 'theater' : 'main'}-${iframeKey}`}
+            key={`main-${iframeKey}`}
             ref={iframeRef}
-            title={`${cartridge.title} game cartridge${isTheater ? ' theater' : ''}`}
+            title={`${cartridge.title} game cartridge`}
             tabIndex={0}
             sandbox="allow-scripts"
             srcDoc={srcDoc}
@@ -389,37 +348,19 @@ export function CartridgeRunner({
   }
 
   return (
-    <>
-      <section
-        ref={runnerRef}
-        tabIndex={-1}
-        className="arcade-panel flex min-h-[520px] flex-col overflow-hidden p-3 outline-none sm:p-4"
-      >
-        <div className="mb-3">
-          <p className="eyebrow">sandbox runner</p>
-          <h2 className="mt-1 text-xl font-black text-white">{cartridge ? cartridge.title : 'Awaiting cartridge'}</h2>
-        </div>
+    <section
+      ref={runnerRef}
+      tabIndex={-1}
+      className="arcade-panel flex min-h-[520px] flex-col overflow-hidden p-3 outline-none sm:p-4"
+    >
+      <div className="mb-3">
+        <p className="eyebrow">sandbox runner</p>
+        <h2 className="mt-1 text-xl font-black text-white">{cartridge ? cartridge.title : 'Awaiting cartridge'}</h2>
+      </div>
 
-        {renderToolbar(false, mainIframeRef)}
-        {renderCrashPanel()}
-        {renderViewport(mainFrameRef, mainIframeRef, false)}
-      </section>
-
-      {theaterOpen && (
-        <div className="fixed inset-0 z-40 bg-black/82 p-3 backdrop-blur-md sm:p-5" role="dialog" aria-modal="true">
-          <div className="mx-auto flex h-full max-w-[1800px] flex-col rounded-lg border border-cyan-200/25 bg-[#080b11] p-3 shadow-[0_30px_120px_rgba(0,0,0,.75)] sm:p-4">
-            <div className="mb-3 flex items-start justify-between gap-4">
-              <div>
-                <p className="eyebrow">theater runner</p>
-                <h2 className="mt-1 text-xl font-black text-white">{cartridge?.title ?? 'Awaiting cartridge'}</h2>
-              </div>
-            </div>
-            {renderToolbar(true, theaterIframeRef)}
-            {renderCrashPanel()}
-            {renderViewport(theaterFrameRef, theaterIframeRef, true)}
-          </div>
-        </div>
-      )}
-    </>
+      {renderToolbar(mainIframeRef)}
+      {renderCrashPanel()}
+      {renderViewport(mainFrameRef, mainIframeRef)}
+    </section>
   )
 }

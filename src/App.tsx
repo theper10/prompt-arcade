@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 import { CartridgeDetails } from './components/CartridgeDetails'
 import { CartridgeRunner } from './components/CartridgeRunner'
 import { Header } from './components/Header'
@@ -20,6 +21,16 @@ import {
 } from './lib/storage'
 import type { AiCartridge, CartridgeSettings } from './types/cartridge'
 
+const gameplayIssueOptions = [
+  'I lose instantly',
+  'Shooting is invisible',
+  'Sorting does not work',
+  'Controls do not match instructions',
+  'I cannot win',
+  'Objects spawn off-screen',
+  'Other',
+]
+
 function App() {
   const [prompt, setPrompt] = useState('make me a cozy vampire fishing game')
   const [settings, setSettings] = useState<CartridgeSettings>(() => loadSettings())
@@ -29,6 +40,9 @@ function App() {
   const [loadingLabel, setLoadingLabel] = useState('')
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [helpOpen, setHelpOpen] = useState(false)
+  const [gameplayFixOpen, setGameplayFixOpen] = useState(false)
+  const [gameplayIssue, setGameplayIssue] = useState(gameplayIssueOptions[0])
+  const [gameplayIssueDetails, setGameplayIssueDetails] = useState('')
 
   useEffect(() => {
     saveSettings(settings)
@@ -179,6 +193,40 @@ function App() {
     )
   }
 
+  async function handleFixGameplaySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!currentCartridge) {
+      showToast('Generate or load a cartridge before fixing gameplay.', 'error')
+      setGameplayFixOpen(false)
+      return
+    }
+
+    const issueText = [gameplayIssue, gameplayIssueDetails.trim()].filter(Boolean).join(': ')
+
+    setGameplayFixOpen(false)
+
+    await requestCartridge(
+      {
+        prompt: currentCartridge.prompt,
+        ...settings,
+        repairContext: {
+          intent: 'gameplay_fix',
+          previousTitle: currentCartridge.title,
+          previousJs: currentCartridge.js,
+          previousControls: currentCartridge.controls,
+          previousObjective: currentCartridge.objective,
+          note: issueText || 'The previous cartridge runs but is unclear, unfair, or not meaningfully playable.',
+        },
+      },
+      'Gameplay fix generated.',
+      'Fixing gameplay...',
+    )
+
+    setGameplayIssue(gameplayIssueOptions[0])
+    setGameplayIssueDetails('')
+  }
+
   function handleSaveCurrent() {
     if (!currentCartridge) {
       return
@@ -270,6 +318,14 @@ Controls: ${currentCartridge.controls.join(', ')}`
             onRepair={handleRepair}
             onRegenerate={handleRegenerateVariant}
             onSimplify={handleSimplifyGame}
+            onFixGameplay={() => {
+              if (!currentCartridge) {
+                showToast('Generate or load a cartridge before fixing gameplay.', 'error')
+                return
+              }
+
+              setGameplayFixOpen(true)
+            }}
             onExport={handleExportCurrent}
           />
           <SavedGallery
@@ -301,6 +357,60 @@ Controls: ${currentCartridge.controls.join(', ')}`
           Turn weird ideas into tiny playable browser games.
         </div>
       </footer>
+
+      {gameplayFixOpen && (
+        <div className="fixed inset-0 z-40 grid place-items-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+          <form
+            onSubmit={handleFixGameplaySubmit}
+            className="w-full max-w-lg rounded-lg border border-cyan-200/25 bg-[#0d1118] p-5 shadow-[0_30px_120px_rgba(0,0,0,.7)]"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="eyebrow">playability repair</p>
+                <h2 className="mt-1 text-xl font-black text-white">Fix Gameplay</h2>
+              </div>
+              <button type="button" onClick={() => setGameplayFixOpen(false)} className="tool-button">
+                Close
+              </button>
+            </div>
+
+            <label className="mt-5 block text-sm font-bold text-slate-200" htmlFor="gameplay-issue">
+              What feels wrong?
+            </label>
+            <select
+              id="gameplay-issue"
+              value={gameplayIssue}
+              onChange={(event) => setGameplayIssue(event.target.value)}
+              className="mt-2 w-full rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-sm text-white outline-none focus:border-cyan-200/70"
+            >
+              {gameplayIssueOptions.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+
+            <label className="mt-4 block text-sm font-bold text-slate-200" htmlFor="gameplay-issue-details">
+              Details
+            </label>
+            <textarea
+              id="gameplay-issue-details"
+              value={gameplayIssueDetails}
+              onChange={(event) => setGameplayIssueDetails(event.target.value.slice(0, 600))}
+              rows={3}
+              placeholder="Optional: what happened when you tried to play?"
+              className="mt-2 w-full resize-none rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-sm leading-6 text-white outline-none placeholder:text-slate-500 focus:border-cyan-200/70"
+            />
+
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setGameplayFixOpen(false)} className="secondary-button">
+                Cancel
+              </button>
+              <button type="submit" disabled={isLoading} className="primary-button">
+                Fix Gameplay
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
       <Toasts toasts={toasts} onDismiss={dismissToast} />
